@@ -64,8 +64,12 @@ export default function PromocionesScreen() {
         renderItem={({ item }) => (
        <Pressable
   style={styles.tarjeta}
-  onPress={() => router.push(`/promocion/${item.id}`)}
->
+onPress={() =>
+  router.push({
+    pathname: '/promocion/[id]',
+    params: { id: item.id },
+  })
+}>
     <Text style={styles.descuento}>{item.titulo}</Text>
     <Text style={styles.comercio}>{item.comercio}</Text>
     <Text style={styles.descripcion}>

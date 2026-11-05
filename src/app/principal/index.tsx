@@ -1,4 +1,6 @@
 
+import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
 import {
   ScrollView,
@@ -45,6 +47,15 @@ export default function HomeScreen() {
   const [busqueda, setBusqueda] = useState('');
   const [categoria, setCategoria] = useState('');
 
+  async function cerrarSesion() {
+    try {
+      await SecureStore.deleteItemAsync('token');
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  }
+
   const lugaresFiltrados = lugares.filter((lugar) => {
     const coincideNombre = lugar.nombre
       .toLowerCase()
@@ -62,6 +73,13 @@ export default function HomeScreen() {
 
       <ScrollView contentContainerStyle={styles.contenido}>
         <View style={styles.encabezado}>
+          <TouchableOpacity
+            onPress={cerrarSesion}
+            style={styles.botonSalir}
+          >
+            <Text style={styles.textoSalir}>Cerrar sesión</Text>
+          </TouchableOpacity>
+
           <Text style={styles.subtitulo}>GUÍA TURÍSTICA</Text>
           <Text style={styles.titulo}>Mi Ciudad Colón</Text>
           <Text style={styles.descripcion}>
@@ -157,6 +175,17 @@ const styles = StyleSheet.create({
   encabezado: {
     marginTop: 15,
     marginBottom: 25,
+  },
+  botonSalir: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+  },
+  textoSalir: {
+    color: '#174F45',
+    fontSize: 14,
+    fontWeight: '600',
   },
   subtitulo: {
     color: '#498777',
