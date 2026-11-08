@@ -1,8 +1,19 @@
 
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
 import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  useFonts,
+} from '@expo-google-fonts/plus-jakarta-sans';
+
+import {
+  ActivityIndicator,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,42 +22,75 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const categorias = [
-  { nombre: 'Playas', emoji: '🏖️' },
-  { nombre: 'Termas', emoji: '♨️' },
-  { nombre: 'Museos', emoji: '🏛️' },
-  { nombre: 'Gastronomía', emoji: '🍽️' },
-  { nombre: 'Naturaleza', emoji: '🌳' },
-  { nombre: 'Artesanías', emoji: '🎨' },
-];
+import {
+  obtenerCategorias,
+  obtenerLugares,
+} from '../../servicios/lugares';
 
-const lugares = [
-  {
-    nombre: 'Termas de Colón',
-    categoria: 'Termas',
-    emoji: '♨️',
-    descripcion: 'Un lugar para relajarte y disfrutar.',
-  },
-  {
-    nombre: 'Molino Forclaz',
-    categoria: 'Museos',
-    emoji: '🏛️',
-    descripcion: 'Descubrí parte de nuestra historia.',
-  },
-  {
-    nombre: 'Parque Nacional El Palmar',
-    categoria: 'Naturaleza',
-    emoji: '🌴',
-    descripcion: 'Explorá nuestros paisajes naturales.',
-  },
-];
+import type { Categoria } from '../../tipos/categoria';
+import type { Lugar } from '../../tipos/lugar';
 
 export default function HomeScreen() {
   const [busqueda, setBusqueda] = useState('');
-  const [categoria, setCategoria] = useState('');
+  const [categoria, setCategoria] = useState('Todos');
 
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [lugares, setLugares] = useState<Lugar[]>([]);
+
+  const [cargandoDatos, setCargandoDatos] = useState(true);
+  const [errorDatos, setErrorDatos] = useState(false);
+
+  // Referencia para mover las categorías con las flechas
+  const scrollCategorias = useRef<ScrollView>(null);
+
+  // TIPOGRAFÍA
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+  });
+
+  // CARGAR LUGARES Y CATEGORÍAS
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarDatos() {
+      try {
+        const [listaLugares, listaCategorias] = await Promise.all([
+          obtenerLugares(),
+          obtenerCategorias(),
+        ]);
+
+        if (!activo) return;
+
+        setLugares(listaLugares);
+        setCategorias(listaCategorias);
+        setErrorDatos(false);
+      } catch (error) {
+        console.error('Error al cargar los datos:', error);
+
+        if (activo) {
+          setErrorDatos(true);
+        }
+      } finally {
+        if (activo) {
+          setCargandoDatos(false);
+        }
+      }
+    }
+
+    cargarDatos();
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  // CERRAR SESIÓN
   async function cerrarSesion() {
     try {
       await SecureStore.deleteItemAsync('token');
@@ -56,256 +100,543 @@ export default function HomeScreen() {
     }
   }
 
+  // FILTRAR LUGARES
   const lugaresFiltrados = lugares.filter((lugar) => {
     const coincideNombre = lugar.nombre
       .toLowerCase()
-      .includes(busqueda.toLowerCase());
+      .includes(busqueda.trim().toLowerCase());
 
     const coincideCategoria =
-      categoria === '' || lugar.categoria === categoria;
+      categoria === 'Todos' ||
+      lugar.categoriaId === categoria;
 
     return coincideNombre && coincideCategoria;
   });
+
+  // MOVER CATEGORÍAS A LA IZQUIERDA
+  function moverIzquierda() {
+    scrollCategorias.current?.scrollTo({
+      x: 0,
+      animated: true,
+    });
+  }
+
+  // MOVER CATEGORÍAS A LA DERECHA
+  function moverDerecha() {
+    scrollCategorias.current?.scrollToEnd({
+      animated: true,
+    });
+  }
+
+  // CARGAR FUENTES
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.cargando}>
+        <ActivityIndicator
+          size="large"
+          color="#17624F"
+        />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      <ScrollView contentContainerStyle={styles.contenido}>
+      <ScrollView
+        contentContainerStyle={styles.contenido}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ENCABEZADO */}
         <View style={styles.encabezado}>
-          <TouchableOpacity
-            onPress={cerrarSesion}
-            style={styles.botonSalir}
-          >
-            <Text style={styles.textoSalir}>Cerrar sesión</Text>
-          </TouchableOpacity>
+          <View style={styles.filaSuperior}>
+            <Text style={styles.marca}>
+              MI CIUDAD
+            </Text>
 
-          <Text style={styles.subtitulo}>GUÍA TURÍSTICA</Text>
-          <Text style={styles.titulo}>Mi Ciudad Colón</Text>
-          <Text style={styles.descripcion}>
-            Descubrí todo lo que Colón tiene para vos.
-          </Text>
-        </View>
-
-        <TextInput
-          style={styles.buscador}
-          placeholder="🔍  Buscar lugares turísticos..."
-          placeholderTextColor="#879A94"
-          value={busqueda}
-          onChangeText={setBusqueda}
-        />
-
-        <Text style={styles.seccion}>Explorá Colón</Text>
-
-        <View style={styles.categorias}>
-          {categorias.map((item) => (
-            <TouchableOpacity
-              key={item.nombre}
-              style={[
-                styles.categoria,
-                categoria === item.nombre && styles.seleccionada,
-              ]}
-              onPress={() =>
-                setCategoria(
-                  categoria === item.nombre ? '' : item.nombre
-                )
-              }
-            >
-              <Text style={styles.emoji}>{item.emoji}</Text>
-              <Text style={styles.nombreCategoria}>
-                {item.nombre}
+            <TouchableOpacity onPress={cerrarSesion}>
+              <Text style={styles.salir}>
+                Salir
               </Text>
             </TouchableOpacity>
-          ))}
+          </View>
+
+          <Text style={styles.titulo}>
+            Descubrí Colón.
+          </Text>
+
+          <Text style={styles.descripcion}>
+            Encontrá lugares para conocer, visitar y disfrutar.
+          </Text>
         </View>
 
-        <Text style={styles.seccion}>Descubrí estos lugares</Text>
-
-        {lugaresFiltrados.length === 0 ? (
-          <Text style={styles.vacio}>
-            No encontramos lugares con esos filtros.
+        {/* BUSCADOR */}
+        <View style={styles.contenedorBuscador}>
+          <Text style={styles.iconoBuscar}>
+            ⌕
           </Text>
+
+          <TextInput
+            style={styles.buscador}
+            placeholder="¿Qué lugar estás buscando?"
+            placeholderTextColor="#929292"
+            value={busqueda}
+            onChangeText={setBusqueda}
+          />
+
+          {busqueda.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setBusqueda('')}
+            >
+              <Text style={styles.limpiar}>
+                ×
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* CATEGORÍAS */}
+        <Text style={styles.tituloSeccion}>
+          Explorá por categoría
+        </Text>
+
+        <View style={styles.contenedorCategorias}>
+          {/* FLECHA IZQUIERDA */}
+          <TouchableOpacity
+            style={styles.flechaCategoria}
+            onPress={moverIzquierda}
+            accessibilityLabel="Ver primeras categorías"
+          >
+            <Text style={styles.textoFlecha}>
+              ‹
+            </Text>
+          </TouchableOpacity>
+
+          {/* CATEGORÍAS DESLIZABLES */}
+          <ScrollView
+            ref={scrollCategorias}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.listaCategorias}
+            style={styles.scrollCategorias}
+          >
+            {/* OPCIÓN TODOS */}
+            <TouchableOpacity
+              style={[
+                styles.filtro,
+                categoria === 'Todos' && styles.filtroActivo,
+              ]}
+              onPress={() => setCategoria('Todos')}
+            >
+              <Text
+                style={[
+                  styles.textoFiltro,
+                  categoria === 'Todos' &&
+                    styles.textoFiltroActivo,
+                ]}
+              >
+                Todos
+              </Text>
+            </TouchableOpacity>
+
+            {/* CATEGORÍAS DEL SERVICIO */}
+            {categorias.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.filtro,
+                  categoria === item.nombre &&
+                    styles.filtroActivo,
+                ]}
+                onPress={() => setCategoria(item.nombre)}
+              >
+                <Text
+                  style={[
+                    styles.textoFiltro,
+                    categoria === item.nombre &&
+                      styles.textoFiltroActivo,
+                  ]}
+                >
+                  {item.nombre}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* FLECHA DERECHA */}
+          <TouchableOpacity
+            style={styles.flechaCategoria}
+            onPress={moverDerecha}
+            accessibilityLabel="Ver últimas categorías"
+          >
+            <Text style={styles.textoFlecha}>
+              ›
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* TÍTULO DEL LISTADO */}
+        <View style={styles.encabezadoSeccion}>
+          <Text style={styles.tituloSeccion}>
+            Lugares para descubrir
+          </Text>
+
+          <Text style={styles.cantidad}>
+            {cargandoDatos || errorDatos
+              ? '—'
+              : lugaresFiltrados.length}{' '}
+            resultados
+          </Text>
+        </View>
+
+        {/* RESULTADOS */}
+        {cargandoDatos ? (
+          <View style={styles.sinResultados}>
+            <ActivityIndicator
+              size="large"
+              color="#17624F"
+            />
+
+            <Text style={styles.textoSinResultados}>
+              Cargando lugares...
+            </Text>
+          </View>
+        ) : errorDatos ? (
+          <View style={styles.sinResultados}>
+            <Text style={styles.textoSinResultados}>
+              No pudimos cargar los lugares.
+              Intentá nuevamente más tarde.
+            </Text>
+          </View>
+        ) : lugaresFiltrados.length === 0 ? (
+          <View style={styles.sinResultados}>
+            <Text style={styles.textoSinResultados}>
+              No encontramos lugares con esos filtros.
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                setBusqueda('');
+                setCategoria('Todos');
+              }}
+            >
+              <Text style={styles.reiniciar}>
+                Limpiar filtros
+              </Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           lugaresFiltrados.map((lugar) => (
-            <View key={lugar.nombre} style={styles.tarjeta}>
-              <View style={styles.imagen}>
-                <Text style={styles.emojiGrande}>
-                  {lugar.emoji}
-                </Text>
+            <TouchableOpacity
+              key={lugar.id}
+              style={styles.tarjeta}
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push({
+                  pathname: '/principal/[id]',
+                  params: {
+                    id: lugar.id,
+                  },
+                })
+              }
+            >
+              {/* FOTOGRAFÍA DEL LUGAR */}
+              <View style={styles.imagenPlaceholder}>
+                {lugar.id === 'lug-001' ? (
+                  <Image
+                    source={require('../../../assets/images/lugares/termas-colon.jpg')}
+                    style={styles.fotoLugar}
+                    resizeMode="cover"
+                  />
+                ) : lugar.id === 'lug-002' ? (
+                  <Image
+                    source={require('../../../assets/images/lugares/molino-forclaz.jpg')}
+                    style={styles.fotoLugar}
+                    resizeMode="cover"
+                  />
+                ) : lugar.id === 'lug-003' ? (
+                  <Image
+                    source={require('../../../assets/images/lugares/el-palmar.jpg')}
+                    style={styles.fotoLugar}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.textoImagen}>
+                    FOTO
+                  </Text>
+                )}
               </View>
 
+              {/* DATOS DEL LUGAR */}
               <View style={styles.info}>
                 <Text style={styles.etiqueta}>
-                  {lugar.categoria}
+                  {lugar.categoriaId.toUpperCase()}
                 </Text>
+
                 <Text style={styles.nombreLugar}>
                   {lugar.nombre}
                 </Text>
+
                 <Text style={styles.descripcionLugar}>
-                  {lugar.descripcion}
+                  {lugar.descripcionCorta}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))
         )}
 
-        <View style={styles.aviso}>
-          <Text style={styles.avisoTitulo}>
-            📍 Explorá lugares cerca tuyo
-          </Text>
-          <Text style={styles.avisoTexto}>
-            Próximamente vas a poder descubrir lugares
-            turísticos en el mapa.
-          </Text>
-        </View>
+        {/* PIE DE PÁGINA */}
+        <Text style={styles.pie}>
+          Una guía para descubrir lo mejor de Colón.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ESTILOS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F8F5',
-  },
-  contenido: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  encabezado: {
-    marginTop: 15,
-    marginBottom: 25,
-  },
-  botonSalir: {
-    alignSelf: 'flex-end',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 15,
-  },
-  textoSalir: {
-    color: '#174F45',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  subtitulo: {
-    color: '#498777',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-  },
-  titulo: {
-    color: '#174F45',
-    fontSize: 31,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  descripcion: {
-    color: '#647B74',
-    fontSize: 15,
-    marginTop: 8,
-  },
-  buscador: {
     backgroundColor: '#FFFFFF',
-    padding: 17,
-    borderRadius: 15,
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#E2EBE5',
+  },
+
+  cargando: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
+  contenido: {
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 80,
+  },
+
+  encabezado: {
     marginBottom: 28,
   },
-  seccion: {
-    color: '#174F45',
-    fontSize: 21,
-    fontWeight: 'bold',
+
+  filaSuperior: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 34,
+  },
+
+  marca: {
+    color: '#17624F',
+    fontSize: 12,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    letterSpacing: 2,
+  },
+
+  salir: {
+    color: '#777777',
+    fontSize: 13,
+    fontFamily: 'PlusJakartaSans_500Medium',
+  },
+
+  titulo: {
+    color: '#202724',
+    fontSize: 33,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    letterSpacing: -0.8,
+    marginBottom: 10,
+  },
+
+  descripcion: {
+    color: '#777D79',
+    fontSize: 15,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    lineHeight: 23,
+  },
+
+  contenedorBuscador: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F6F4',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 54,
+    marginBottom: 35,
+  },
+
+  iconoBuscar: {
+    color: '#515D56',
+    fontSize: 28,
+    marginRight: 10,
+  },
+
+  buscador: {
+    flex: 1,
+    color: '#202724',
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans_400Regular',
+  },
+
+  limpiar: {
+    color: '#777777',
+    fontSize: 24,
+    paddingHorizontal: 5,
+  },
+
+  tituloSeccion: {
+    color: '#202724',
+    fontSize: 19,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
     marginBottom: 17,
   },
-  categorias: {
+
+  contenedorCategorias: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  categoria: {
-    backgroundColor: '#FFFFFF',
-    width: '31%',
-    paddingVertical: 18,
-    borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2EBE5',
+    marginBottom: 30,
   },
-  seleccionada: {
-    backgroundColor: '#CDE8D8',
-    borderColor: '#498777',
+
+  scrollCategorias: {
+    flex: 1,
+    minWidth: 0,
   },
-  emoji: {
-    fontSize: 29,
-    marginBottom: 8,
+
+  listaCategorias: {
+    gap: 9,
+    paddingBottom: 0,
+    paddingHorizontal: 3,
   },
-  nombreCategoria: {
-    color: '#174F45',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tarjeta: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 17,
-    marginBottom: 15,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: '#E2EBE5',
-  },
-  imagen: {
-    width: 95,
-    backgroundColor: '#DFEEE4',
+
+  flechaCategoria: {
+    width: 30,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emojiGrande: {
-    fontSize: 40,
+
+  textoFlecha: {
+    fontSize: 30,
+    color: '#17624F',
   },
+
+  filtro: {
+    backgroundColor: '#F5F6F4',
+    paddingHorizontal: 17,
+    paddingVertical: 11,
+    borderRadius: 25,
+    alignSelf: 'flex-start',
+  },
+
+  filtroActivo: {
+    backgroundColor: '#17624F',
+  },
+
+  textoFiltro: {
+    color: '#555E58',
+    fontSize: 13,
+    fontFamily: 'PlusJakartaSans_500Medium',
+  },
+
+  textoFiltroActivo: {
+    color: '#FFFFFF',
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+  },
+
+  encabezadoSeccion: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 5,
+  },
+
+  cantidad: {
+    color: '#888888',
+    fontSize: 12,
+    fontFamily: 'PlusJakartaSans_400Regular',
+  },
+
+  tarjeta: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ECEDEB',
+    overflow: 'hidden',
+    marginBottom: 14,
+    minHeight: 118,
+  },
+
+  imagenPlaceholder: {
+    width: 110,
+    backgroundColor: '#E9EDE9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  fotoLugar: {
+    width: '100%',
+    height: '100%',
+  },
+
+  textoImagen: {
+    color: '#A0AAA2',
+    fontSize: 11,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    letterSpacing: 2,
+  },
+
   info: {
     flex: 1,
-    padding: 15,
+    padding: 14,
+    justifyContent: 'center',
   },
+
   etiqueta: {
-    color: '#498777',
-    fontSize: 12,
-    fontWeight: 'bold',
+    color: '#17624F',
+    fontSize: 10,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    letterSpacing: 0.6,
+    marginBottom: 7,
   },
+
   nombreLugar: {
-    color: '#174F45',
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginTop: 5,
+    color: '#202724',
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans_500Medium',
+    marginBottom: 6,
   },
+
   descripcionLugar: {
-    color: '#72857D',
-    fontSize: 13,
-    marginTop: 5,
+    color: '#777D79',
+    fontSize: 12,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    lineHeight: 18,
   },
-  vacio: {
-    color: '#72857D',
-    textAlign: 'center',
-    padding: 25,
+
+  sinResultados: {
+    alignItems: 'center',
+    paddingVertical: 35,
   },
-  aviso: {
-    backgroundColor: '#DFEEE4',
-    borderRadius: 17,
-    padding: 20,
-    marginTop: 15,
-  },
-  avisoTitulo: {
-    color: '#174F45',
-    fontSize: 17,
-    fontWeight: 'bold',
-  },
-  avisoTexto: {
-    color: '#647B74',
+
+  textoSinResultados: {
+    color: '#777D79',
     fontSize: 14,
-    marginTop: 8,
-    lineHeight: 21,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+
+  reiniciar: {
+    color: '#17624F',
+    fontSize: 14,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+  },
+
+  pie: {
+    color: '#A0A5A1',
+    fontSize: 12,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    textAlign: 'center',
+    marginTop: 35,
   },
 });
