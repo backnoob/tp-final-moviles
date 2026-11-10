@@ -1,8 +1,6 @@
-
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -15,66 +13,45 @@ export default function RegistroScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
 
   async function registrarse() {
-    if (!nombre.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Completá todos los campos');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert(
-        'Error',
-        'La contraseña debe tener al menos 6 caracteres'
-      );
-      return;
-    }
-
     if (cargando) return;
+    setError('');
+
+    if (!nombre.trim() || !email.trim() || !password.trim()) {
+      setError('Completá todos los campos.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
 
     setCargando(true);
 
     try {
-      const respuesta = await fetch(
-        'http://192.168.1.42:3000/auth/registro',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            nombre: nombre.trim(),
-            email: email.trim(),
-            contrasena: password,
-          }),
-        }
-      );
+      const respuesta = await fetch('http://localhost:3000/auth/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          email: email.trim(),
+          contrasena: password,
+        }),
+      });
 
       const resultado = await respuesta.json();
 
       if (!respuesta.ok) {
-        Alert.alert(
-          'Error',
-          resultado.error?.mensaje || 'No se pudo crear la cuenta'
-        );
+        setError(resultado.error?.mensaje || 'No se pudo crear la cuenta.');
         return;
       }
 
-      Alert.alert(
-        'Registro exitoso',
-        'Tu cuenta fue creada. Ahora podés iniciar sesión.',
-        [
-          {
-            text: 'Aceptar',
-            onPress: () => router.replace('/login'),
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert(
-        'Error de conexión',
-        'No se pudo conectar con el servidor. Verificá que la API esté encendida.'
-      );
+      router.replace('/login');
+    } catch {
+      setError('No se pudo conectar con el servidor. Verificá que la API esté encendida.');
     } finally {
       setCargando(false);
     }
@@ -83,15 +60,14 @@ export default function RegistroScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.titulo}>Crear cuenta</Text>
-      <Text style={styles.subtitulo}>
-        Registrate en Mi Ciudad Colón
-      </Text>
+      <Text style={styles.subtitulo}>Registrate en Mi Ciudad Colón</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Nombre"
         value={nombre}
         onChangeText={setNombre}
+        autoCapitalize="words"
       />
 
       <TextInput
@@ -106,11 +82,13 @@ export default function RegistroScreen() {
 
       <TextInput
         style={styles.input}
-        placeholder="Contraseña"
+        placeholder="Contraseña (mínimo 8 caracteres)"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable
         style={[styles.boton, cargando && styles.botonDeshabilitado]}
@@ -157,6 +135,11 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 15,
     fontSize: 16,
+  },
+  error: {
+    color: '#B42318',
+    fontSize: 14,
+    marginBottom: 8,
   },
   boton: {
     backgroundColor: '#174F45',

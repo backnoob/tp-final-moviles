@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
-  Pressable,
   View,
 } from 'react-native';
 

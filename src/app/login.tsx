@@ -3,60 +3,70 @@ import * as SecureStore from 'expo-secure-store';
 import { useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [mensajeError, setMensajeError] = useState('');
+
+  function mostrarError(mensaje: string) {
+    setMensajeError(mensaje);
+    if (Platform.OS !== 'web') {
+      Alert.alert('Error', mensaje);
+    }
+  }
 
   async function ingresar() {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Completá todos los campos');
+      mostrarError('Completá todos los campos');
       return;
     }
 
     if (cargando) return;
 
+    setMensajeError('');
     setCargando(true);
 
     try {
-      const respuesta = await fetch(
-        'http://192.168.1.42:3000/auth/ingreso',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: email.trim(),
-            contrasena: password,
-          }),
-        }
-      );
+      const respuesta = await fetch('http://192.168.0.245:3000/auth/ingreso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          contrasena: password,
+        }),
+      });
 
       const resultado = await respuesta.json();
 
       if (!respuesta.ok) {
-        Alert.alert(
-          'Error',
-          resultado.error?.mensaje || 'No se pudo iniciar sesión'
-        );
+        mostrarError(resultado.error?.mensaje || 'No se pudo iniciar sesión');
         return;
       }
-      await SecureStore.setItemAsync('token', resultado.datos.token);
-      Alert.alert('Bienvenido', resultado.datos.usuario.nombre);
 
-      router.replace('/principal');
+      const token = resultado.datos?.token;
+      if (!token) {
+        mostrarError('El servidor no devolvió un token de sesión.');
+        return;
+      }
+
+      if (Platform.OS === 'web') {
+        window.localStorage.setItem('token', token);
+      } else {
+        await SecureStore.setItemAsync('token', token);
+      }
+
+      router.replace('/principal/bienvenida');
     } catch (error) {
-      Alert.alert(
-        'Error de conexión',
-        'No se pudo conectar con el servidor. Verificá que la API esté encendida.'
-      );
+      mostrarError('No se pudo completar el inicio de sesión. Verificá que la API esté encendida.');
     } finally {
       setCargando(false);
     }
@@ -65,9 +75,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.titulo}>Mi Ciudad Colón</Text>
-      <Text style={styles.subtitulo}>
-        Iniciá sesión para continuar
-      </Text>
+      <Text style={styles.subtitulo}>Iniciá sesión para continuar</Text>
 
       <TextInput
         style={styles.input}
@@ -87,6 +95,8 @@ export default function LoginScreen() {
         onChangeText={setPassword}
       />
 
+      {mensajeError ? <Text style={styles.error}>{mensajeError}</Text> : null}
+
       <Pressable
         style={[styles.boton, cargando && styles.botonDeshabilitado]}
         onPress={ingresar}
@@ -98,9 +108,7 @@ export default function LoginScreen() {
       </Pressable>
 
       <Pressable onPress={() => router.push('/registro')}>
-        <Text style={styles.enlace}>
-          ¿No tenés cuenta? Registrate
-        </Text>
+        <Text style={styles.enlace}>¿No tenés cuenta? Registrate</Text>
       </Pressable>
     </View>
   );
@@ -135,6 +143,11 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
   },
+  error: {
+    color: '#B42318',
+    marginBottom: 10,
+    fontSize: 14,
+  },
   boton: {
     backgroundColor: '#174F45',
     padding: 17,
@@ -142,9 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  botonDeshabilitado: {
-    opacity: 0.6,
-  },
+  botonDeshabilitado: { opacity: 0.6 },
   textoBoton: {
     color: '#FFFFFF',
     fontSize: 16,

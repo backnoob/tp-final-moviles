@@ -1,8 +1,4 @@
 
-import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import { useEffect, useRef, useState } from 'react';
-
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -11,9 +7,15 @@ import {
   useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans';
 
+import { router, useFocusEffect } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -28,10 +30,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   obtenerCategorias,
   obtenerLugares,
-} from '../../servicios/lugares';
+} from '@/servicios/lugares';
 
-import type { Categoria } from '../../tipos/categoria';
-import type { Lugar } from '../../tipos/lugar';
+import {
+  guardarFavorito,
+  obtenerFavoritos,
+  quitarFavorito,
+} from '@/servicios/favoritos';
+
+import type { Categoria } from '@/tipos/categoria';
+import type { Lugar } from '@/tipos/lugares';
 
 export default function HomeScreen() {
   const [busqueda, setBusqueda] = useState('');
@@ -43,7 +51,12 @@ export default function HomeScreen() {
   const [cargandoDatos, setCargandoDatos] = useState(true);
   const [errorDatos, setErrorDatos] = useState(false);
 
-  // Referencia para mover las categorías con las flechas
+  // FAVORITOS
+  const [favoritosIds, setFavoritosIds] = useState<string[]>([]);
+  const [cargandoFavoritos, setCargandoFavoritos] = useState(true);
+  const [procesandoId, setProcesandoId] = useState<string | null>(null);
+
+  // REFERENCIA PARA DESPLAZAR LAS CATEGORÍAS
   const scrollCategorias = useRef<ScrollView>(null);
 
   // TIPOGRAFÍA
@@ -54,7 +67,7 @@ export default function HomeScreen() {
     PlusJakartaSans_700Bold,
   });
 
-  // CARGAR LUGARES Y CATEGORÍAS
+  // CARGAR LUGARES Y CATEGORÍAS DESDE LA API
   useEffect(() => {
     let activo = true;
 
@@ -90,17 +103,106 @@ export default function HomeScreen() {
     };
   }, []);
 
+  // CARGAR FAVORITOS DESDE LA API
+  // SE ACTUALIZAN CADA VEZ QUE ENTRAMOS A LA PANTALLA
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
+
+      async function cargarFavoritos() {
+        setCargandoFavoritos(true);
+
+        try {
+          const listaFavoritos = await obtenerFavoritos();
+
+          if (!activo) return;
+
+          setFavoritosIds(
+            listaFavoritos.map((favorito) => favorito.lugarId)
+          );
+        } catch (error) {
+          console.error('Error al cargar favoritos:', error);
+
+          if (activo) {
+            setFavoritosIds([]);
+          }
+        } finally {
+          if (activo) {
+            setCargandoFavoritos(false);
+          }
+        }
+      }
+
+      cargarFavoritos();
+
+      return () => {
+        activo = false;
+      };
+    }, [])
+  );
+
+  // MOSTRAR MENSAJES DE ERROR
+  function mostrarError(mensaje: string) {
+    if (Platform.OS === 'web') {
+      window.alert(mensaje);
+    } else {
+      Alert.alert('Favoritos', mensaje);
+    }
+  }
+
+  // GUARDAR O QUITAR UN LUGAR DE FAVORITOS
+  async function cambiarFavorito(lugarId: string) {
+    if (procesandoId !== null || cargandoFavoritos) return;
+
+    const yaEsFavorito = favoritosIds.includes(lugarId);
+
+    setProcesandoId(lugarId);
+
+    try {
+      if (yaEsFavorito) {
+        // QUITAR DE FAVORITOS
+        await quitarFavorito(lugarId);
+
+        setFavoritosIds((anteriores) =>
+          anteriores.filter((id) => id !== lugarId)
+        );
+      } else {
+        // GUARDAR EN FAVORITOS
+        await guardarFavorito(lugarId);
+
+        setFavoritosIds((anteriores) =>
+          anteriores.includes(lugarId)
+            ? anteriores
+            : [...anteriores, lugarId]
+        );
+      }
+    } catch (error) {
+      console.error('Error al modificar favorito:', error);
+
+      mostrarError(
+        'No pudimos actualizar tus favoritos. Intentá nuevamente.'
+      );
+    } finally {
+      setProcesandoId(null);
+    }
+  }
+
   // CERRAR SESIÓN
   async function cerrarSesion() {
     try {
-      await SecureStore.deleteItemAsync('token');
+      if (Platform.OS === 'web') {
+        window.localStorage.removeItem('token');
+      } else {
+        await SecureStore.deleteItemAsync('token');
+      }
+
       router.replace('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
   }
 
-  // FILTRAR LUGARES
+  // FILTRAR LUGARES POR NOMBRE Y CATEGORÍA
   const lugaresFiltrados = lugares.filter((lugar) => {
     const coincideNombre = lugar.nombre
       .toLowerCase()
@@ -128,7 +230,7 @@ export default function HomeScreen() {
     });
   }
 
-  // CARGAR FUENTES
+  // ESPERAR A QUE CARGUEN LAS FUENTES
   if (!fontsLoaded) {
     return (
       <View style={styles.cargando}>
@@ -151,10 +253,21 @@ export default function HomeScreen() {
         {/* ENCABEZADO */}
         <View style={styles.encabezado}>
           <View style={styles.filaSuperior}>
-            <Text style={styles.marca}>
-              MI CIUDAD
-            </Text>
 
+            {/* VOLVER A LA PANTALLA DE BIENVENIDA */}
+            <TouchableOpacity
+              onPress={() =>
+                router.replace('/principal/bienvenida')
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Volver a la bienvenida"
+            >
+              <Text style={styles.marca}>
+                ← Inicio
+              </Text>
+            </TouchableOpacity>
+
+            {/* CERRAR SESIÓN */}
             <TouchableOpacity onPress={cerrarSesion}>
               <Text style={styles.salir}>
                 Salir
@@ -170,6 +283,19 @@ export default function HomeScreen() {
             Encontrá lugares para conocer, visitar y disfrutar.
           </Text>
         </View>
+
+        {/* BOTÓN EXPLORAR MAPA */}
+        <TouchableOpacity
+          style={styles.botonMapa}
+          activeOpacity={0.8}
+          onPress={() => router.push('/principal/mapa')}
+          accessibilityRole="button"
+          accessibilityLabel="Explorar mapa de Colón"
+        >
+          <Text style={styles.textoBotonMapa}>
+            📍 Explorar mapa
+          </Text>
+        </TouchableOpacity>
 
         {/* BUSCADOR */}
         <View style={styles.contenedorBuscador}>
@@ -202,6 +328,7 @@ export default function HomeScreen() {
         </Text>
 
         <View style={styles.contenedorCategorias}>
+
           {/* FLECHA IZQUIERDA */}
           <TouchableOpacity
             style={styles.flechaCategoria}
@@ -240,21 +367,21 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* CATEGORÍAS DEL SERVICIO */}
+            {/* CATEGORÍAS DESDE LA API */}
             {categorias.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.filtro,
-                  categoria === item.nombre &&
+                  categoria === item.id &&
                     styles.filtroActivo,
                 ]}
-                onPress={() => setCategoria(item.nombre)}
+                onPress={() => setCategoria(item.id)}
               >
                 <Text
                   style={[
                     styles.textoFiltro,
-                    categoria === item.nombre &&
+                    categoria === item.id &&
                       styles.textoFiltroActivo,
                   ]}
                 >
@@ -327,63 +454,120 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          lugaresFiltrados.map((lugar) => (
-            <TouchableOpacity
-              key={lugar.id}
-              style={styles.tarjeta}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push({
-                  pathname: '/principal/[id]',
-                  params: {
-                    id: lugar.id,
-                  },
-                })
-              }
-            >
-              {/* FOTOGRAFÍA DEL LUGAR */}
-              <View style={styles.imagenPlaceholder}>
-                {lugar.id === 'lug-001' ? (
-                  <Image
-                    source={require('../../../assets/images/lugares/termas-colon.jpg')}
-                    style={styles.fotoLugar}
-                    resizeMode="cover"
-                  />
-                ) : lugar.id === 'lug-002' ? (
-                  <Image
-                    source={require('../../../assets/images/lugares/molino-forclaz.jpg')}
-                    style={styles.fotoLugar}
-                    resizeMode="cover"
-                  />
-                ) : lugar.id === 'lug-003' ? (
-                  <Image
-                    source={require('../../../assets/images/lugares/el-palmar.jpg')}
-                    style={styles.fotoLugar}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text style={styles.textoImagen}>
-                    FOTO
-                  </Text>
-                )}
+          lugaresFiltrados.map((lugar) => {
+            const esFavorito = favoritosIds.includes(lugar.id);
+            const estaProcesando = procesandoId === lugar.id;
+
+            return (
+              <View
+                key={lugar.id}
+                style={styles.tarjeta}
+              >
+                {/* CONTENIDO DE LA TARJETA */}
+                <TouchableOpacity
+                  style={styles.contenidoTarjeta}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/principal/[id]',
+                      params: {
+                        id: lugar.id,
+                      },
+                    })
+                  }
+                >
+                  {/* FOTOGRAFÍA DEL LUGAR */}
+                  <View style={styles.imagenPlaceholder}>
+                    {lugar.imagenes?.[0] ? (
+                      <Image
+                        source={{ uri: lugar.imagenes[0] }}
+                        style={styles.fotoLugar}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Text style={styles.textoImagen}>
+                        SIN FOTO
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* INFORMACIÓN DEL LUGAR */}
+                  <View style={styles.info}>
+
+                    {/* CATEGORÍA */}
+                    <Text
+                      style={styles.etiqueta}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {categorias.find(
+                        (item) =>
+                          item.id === lugar.categoriaId
+                      )?.nombre ?? 'Sin categoría'}
+                    </Text>
+
+                    {/* NOMBRE */}
+                    <Text
+                      style={styles.nombreLugar}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      {lugar.nombre}
+                    </Text>
+
+                    {/* DESCRIPCIÓN */}
+                    <Text
+                      style={styles.descripcionLugar}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      {lugar.descripcionCorta}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* CORAZÓN DE FAVORITOS */}
+                <TouchableOpacity
+                  style={styles.botonFavorito}
+                  activeOpacity={0.7}
+                  disabled={
+                    cargandoFavoritos ||
+                    procesandoId !== null
+                  }
+                  onPress={() =>
+                    cambiarFavorito(lugar.id)
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    esFavorito
+                      ? `Quitar ${lugar.nombre} de favoritos`
+                      : `Guardar ${lugar.nombre} en favoritos`
+                  }
+                >
+                  {estaProcesando ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#C45159"
+                    />
+                  ) : cargandoFavoritos ? (
+                    <Text style={styles.corazonVacio}>
+                      ♡
+                    </Text>
+                  ) : (
+                    <Text
+                      style={
+                        esFavorito
+                          ? styles.corazonLleno
+                          : styles.corazonVacio
+                      }
+                    >
+                      {esFavorito ? '♥' : '♡'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
               </View>
-
-              {/* DATOS DEL LUGAR */}
-              <View style={styles.info}>
-                <Text style={styles.etiqueta}>
-                  {lugar.categoriaId.toUpperCase()}
-                </Text>
-
-                <Text style={styles.nombreLugar}>
-                  {lugar.nombre}
-                </Text>
-
-                <Text style={styles.descripcionLugar}>
-                  {lugar.descripcionCorta}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
+            );
+          })
         )}
 
         {/* PIE DE PÁGINA */}
@@ -430,7 +614,7 @@ const styles = StyleSheet.create({
     color: '#17624F',
     fontSize: 12,
     fontFamily: 'PlusJakartaSans_700Bold',
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
 
   salir: {
@@ -452,6 +636,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'PlusJakartaSans_400Regular',
     lineHeight: 23,
+  },
+
+  // BOTÓN PARA ABRIR EL MAPA
+  botonMapa: {
+    backgroundColor: '#17624F',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+
+  textoBotonMapa: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
   },
 
   contenedorBuscador: {
@@ -555,6 +755,7 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_400Regular',
   },
 
+  // TARJETAS CON ALTURA UNIFORME
   tarjeta: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -563,19 +764,30 @@ const styles = StyleSheet.create({
     borderColor: '#ECEDEB',
     overflow: 'hidden',
     marginBottom: 14,
-    minHeight: 118,
+    height: 125,
+    alignItems: 'center',
+  },
+
+  // CONTENIDO PRINCIPAL DE LA TARJETA
+  contenidoTarjeta: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    height: 125,
   },
 
   imagenPlaceholder: {
     width: 110,
+    height: 125,
     backgroundColor: '#E9EDE9',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   fotoLugar: {
-    width: '100%',
-    height: '100%',
+    width: 110,
+    height: 125,
   },
 
   textoImagen: {
@@ -587,7 +799,9 @@ const styles = StyleSheet.create({
 
   info: {
     flex: 1,
-    padding: 14,
+    minWidth: 0,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
     justifyContent: 'center',
   },
 
@@ -595,22 +809,42 @@ const styles = StyleSheet.create({
     color: '#17624F',
     fontSize: 10,
     fontFamily: 'PlusJakartaSans_700Bold',
-    letterSpacing: 0.6,
-    marginBottom: 7,
+    letterSpacing: 0.4,
+    marginBottom: 5,
   },
 
   nombreLugar: {
     color: '#202724',
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'PlusJakartaSans_500Medium',
-    marginBottom: 6,
+    lineHeight: 20,
+    marginBottom: 5,
   },
 
   descripcionLugar: {
     color: '#777D79',
     fontSize: 12,
     fontFamily: 'PlusJakartaSans_400Regular',
-    lineHeight: 18,
+    lineHeight: 17,
+  },
+
+  // BOTÓN DEL CORAZÓN
+  botonFavorito: {
+    width: 42,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 3,
+  },
+
+  corazonVacio: {
+    color: '#C45159',
+    fontSize: 29,
+  },
+
+  corazonLleno: {
+    color: '#C45159',
+    fontSize: 25,
   },
 
   sinResultados: {

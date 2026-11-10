@@ -3,30 +3,44 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { obtenerLugarPorId } from '../../servicios/lugares';
+import {
+  obtenerCategorias,
+  obtenerLugarPorId,
+} from '../../servicios/lugares';
+
 import type { Lugar } from '../../tipos/lugar';
 
 export default function DetalleLugar() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
+  const { width } = useWindowDimensions();
+
+  // MÁRGENES DE 22 PX A CADA LADO
+  const anchoGaleria = width - 44;
+
   const [lugar, setLugar] = useState<Lugar | null>(null);
+  const [nombreCategoria, setNombreCategoria] = useState('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
 
-  // OBTENER EL LUGAR DESDE EL SERVICIO
+  // FOTO ACTUAL DE LA GALERÍA
+  const [fotoActual, setFotoActual] = useState(0);
+
+  // OBTENER LUGAR Y CATEGORÍA DESDE LA API
   useEffect(() => {
     let activo = true;
 
@@ -34,6 +48,8 @@ export default function DetalleLugar() {
       setCargando(true);
       setError(false);
       setLugar(null);
+      setNombreCategoria('');
+      setFotoActual(0);
 
       try {
         if (!id) {
@@ -41,11 +57,22 @@ export default function DetalleLugar() {
           return;
         }
 
-        const resultado = await obtenerLugarPorId(id);
+        const [resultado, listaCategorias] = await Promise.all([
+          obtenerLugarPorId(id),
+          obtenerCategorias(),
+        ]);
 
-        if (activo) {
-          setLugar(resultado ?? null);
-        }
+        if (!activo) return;
+
+        setLugar(resultado ?? null);
+
+        const categoriaEncontrada = listaCategorias.find(
+          (item) => item.id === resultado?.categoriaId
+        );
+
+        setNombreCategoria(
+          categoriaEncontrada?.nombre ?? 'Sin categoría'
+        );
       } catch (error) {
         console.error('Error al obtener el lugar:', error);
 
@@ -80,11 +107,26 @@ export default function DetalleLugar() {
         );
       }
     } catch (error) {
+      console.error('Error al abrir enlace:', error);
+
       Alert.alert(
         'Error',
         'No se pudo abrir el enlace.'
       );
     }
+  }
+
+  // ABRIR GOOGLE MAPS CON COORDENADAS DE LA API
+  async function abrirMapa() {
+    if (!lugar?.coordenadas) return;
+
+    const { latitud, longitud } = lugar.coordenadas;
+
+    const url =
+      'https://www.google.com/maps/dir/?api=1' +
+      `&destination=${latitud},${longitud}`;
+
+    await abrirEnlace(url);
   }
 
   // PANTALLA DE CARGA
@@ -105,7 +147,7 @@ export default function DetalleLugar() {
     );
   }
 
-  // PANTALLA DE ERROR O LUGAR NO ENCONTRADO
+  // PANTALLA DE ERROR
   if (error || !lugar) {
     return (
       <SafeAreaView style={styles.container}>
@@ -129,12 +171,22 @@ export default function DetalleLugar() {
   }
 
   const telefonoDisponible =
-    lugar.telefono !== null &&
+    typeof lugar.telefono === 'string' &&
     lugar.telefono.trim() !== '';
 
   const sitioWebDisponible =
-    lugar.sitioWeb !== null &&
+    typeof lugar.sitioWeb === 'string' &&
     lugar.sitioWeb.trim() !== '';
+
+  const dias = [
+    'Domingo',
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -149,36 +201,56 @@ export default function DetalleLugar() {
           </Text>
         </TouchableOpacity>
 
-        {/* FOTOGRAFÍA DEL LUGAR */}
+        {/* GALERÍA DE FOTOGRAFÍAS DESDE LA API */}
         <View style={styles.imagen}>
-          {lugar.id === 'lug-001' ? (
-            <Image
-              source={require('../../../assets/images/lugares/termas-colon.jpg')}
-              style={styles.fotoLugar}
-              resizeMode="cover"
-            />
-          ) : lugar.id === 'lug-002' ? (
-            <Image
-              source={require('../../../assets/images/lugares/molino-forclaz.jpg')}
-              style={styles.fotoLugar}
-              resizeMode="cover"
-            />
-          ) : lugar.id === 'lug-003' ? (
-            <Image
-              source={require('../../../assets/images/lugares/el-palmar.jpg')}
-              style={styles.fotoLugar}
-              resizeMode="cover"
-            />
+          {lugar.imagenes?.length > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={styles.scrollGaleria}
+              onMomentumScrollEnd={(evento) => {
+                const desplazamiento =
+                  evento.nativeEvent.contentOffset.x;
+
+                const indice = Math.round(
+                  desplazamiento / anchoGaleria
+                );
+
+                setFotoActual(indice);
+              }}
+            >
+              {lugar.imagenes.map((imagen, index) => (
+                <Image
+                  key={`${imagen}-${index}`}
+                  source={{ uri: imagen }}
+                  style={{
+                    width: anchoGaleria,
+                    height: 220,
+                  }}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
           ) : (
             <Text style={styles.textoImagen}>
-              FOTO DEL LUGAR
+              SIN FOTO
             </Text>
+          )}
+
+          {/* CONTADOR DE FOTOGRAFÍAS */}
+          {lugar.imagenes?.length > 1 && (
+            <View style={styles.contadorFotos}>
+              <Text style={styles.textoContadorFotos}>
+                {fotoActual + 1} / {lugar.imagenes.length}
+              </Text>
+            </View>
           )}
         </View>
 
         {/* CATEGORÍA */}
         <Text style={styles.categoria}>
-          {lugar.categoriaId.toUpperCase()}
+          {nombreCategoria}
         </Text>
 
         {/* NOMBRE */}
@@ -218,7 +290,7 @@ export default function DetalleLugar() {
               </Text>
 
               <Text style={styles.valorInfo}>
-                {lugar.direccion}
+                {lugar.direccion || 'No disponible'}
               </Text>
             </View>
           </View>
@@ -234,27 +306,16 @@ export default function DetalleLugar() {
                 Horarios
               </Text>
 
-              {lugar.horarios.length > 0 ? (
-                lugar.horarios.map((horario, index) => {
-                  const dias = [
-                    'Domingo',
-                    'Lunes',
-                    'Martes',
-                    'Miércoles',
-                    'Jueves',
-                    'Viernes',
-                    'Sábado',
-                  ];
-
-                  return (
-                    <Text
-                      key={`${horario.dia}-${index}`}
-                      style={styles.valorInfo}
-                    >
-                      {dias[horario.dia]}: {horario.abre} a {horario.cierra}
-                    </Text>
-                  );
-                })
+              {lugar.horarios?.length > 0 ? (
+                lugar.horarios.map((horario, index) => (
+                  <Text
+                    key={`${horario.dia}-${index}`}
+                    style={styles.valorInfo}
+                  >
+                    {dias[horario.dia] ?? 'Día'}:{' '}
+                    {horario.abre} a {horario.cierra}
+                  </Text>
+                ))
               ) : (
                 <Text style={styles.valorInfo}>
                   Horarios pendientes de confirmar
@@ -274,7 +335,7 @@ export default function DetalleLugar() {
                 Teléfono
               </Text>
 
-              {telefonoDisponible && lugar.telefono ? (
+              {telefonoDisponible ? (
                 <TouchableOpacity
                   onPress={() =>
                     abrirEnlace(
@@ -305,7 +366,7 @@ export default function DetalleLugar() {
                 Sitio web
               </Text>
 
-              {sitioWebDisponible && lugar.sitioWeb ? (
+              {sitioWebDisponible ? (
                 <TouchableOpacity
                   onPress={() =>
                     abrirEnlace(lugar.sitioWeb!)
@@ -335,12 +396,68 @@ export default function DetalleLugar() {
               </Text>
 
               <Text style={styles.valorInfo}>
-                {lugar.precioEntrada === null
+                {lugar.precioEntrada == null
                   ? 'Precio no informado'
                   : lugar.precioEntrada === 0
                     ? 'Entrada gratuita'
                     : `$${lugar.precioEntrada.toLocaleString('es-AR')}`}
               </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* BOTÓN CÓMO LLEGAR */}
+        <TouchableOpacity
+          style={styles.botonMapa}
+          onPress={abrirMapa}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.textoBotonMapa}>
+            📍 Cómo llegar
+          </Text>
+        </TouchableOpacity>
+
+        {/* SERVICIOS DISPONIBLES */}
+        <View style={styles.seccionServicios}>
+          <Text style={styles.tituloSeccion}>
+            Servicios disponibles
+          </Text>
+
+          <View style={styles.tarjetaInfo}>
+            {/* ACCESIBILIDAD */}
+            <View style={styles.filaInfo}>
+              <Text style={styles.icono}>♿</Text>
+
+              <View style={styles.textosInfo}>
+                <Text style={styles.etiquetaInfo}>
+                  Accesibilidad
+                </Text>
+
+                <Text style={styles.valorInfo}>
+                  {lugar.accesible
+                    ? 'Figura como accesible'
+                    : 'No figura como accesible'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.separador} />
+
+            {/* AUDIOGUÍA */}
+            <View style={styles.filaInfo}>
+              <Text style={styles.icono}>♫</Text>
+
+              <View style={styles.textosInfo}>
+                <Text style={styles.etiquetaInfo}>
+                  Audioguía
+                </Text>
+
+                <Text style={styles.valorInfo}>
+                  {lugar.audioguia
+                    ? 'Audioguía disponible'
+                    : 'No disponible'}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -383,6 +500,7 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
 
+  // CONTENEDOR DE LA GALERÍA
   imagen: {
     height: 220,
     backgroundColor: '#E9EDE9',
@@ -391,6 +509,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 28,
     overflow: 'hidden',
+  },
+
+  scrollGaleria: {
+    width: '100%',
   },
 
   fotoLugar: {
@@ -403,6 +525,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'PlusJakartaSans_500Medium',
     letterSpacing: 2,
+  },
+
+  // CONTADOR DE FOTOS
+  contadorFotos: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+
+  textoContadorFotos: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
   },
 
   categoria: {
@@ -429,6 +568,11 @@ const styles = StyleSheet.create({
 
   seccion: {
     marginBottom: 34,
+  },
+
+  seccionServicios: {
+    marginTop: 34,
+    marginBottom: 20,
   },
 
   tituloSeccion: {
@@ -492,5 +636,22 @@ const styles = StyleSheet.create({
   separador: {
     height: 1,
     backgroundColor: '#E7EAE6',
+  },
+
+  // BOTÓN CÓMO LLEGAR
+  botonMapa: {
+    backgroundColor: '#17624F',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+
+  textoBotonMapa: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'PlusJakartaSans_600SemiBold',
   },
 });
