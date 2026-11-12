@@ -1,13 +1,7 @@
-import { Platform } from 'react-native';
 
 import type { Evento } from '../tipos/evento';
 
-// MISMA DIRECCIÓN QUE UTILIZAMOS PARA LOS LUGARES
-const API_URL =
-  Platform.OS === 'web'
-    ? 'http://localhost:3000'
-    : 'http://192.168.0.245:3000';
-
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 type RespuestaApi<T> = {
   datos: T;
   meta?: unknown;

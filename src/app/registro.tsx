@@ -32,7 +32,7 @@ export default function RegistroScreen() {
     setCargando(true);
 
     try {
-      const respuesta = await fetch('http://localhost:3000/auth/registro', {
+      const respuesta = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/auth/registro`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

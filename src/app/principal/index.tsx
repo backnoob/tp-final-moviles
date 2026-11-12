@@ -1,10 +1,10 @@
 
 import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  useFonts,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans';
 
 import { router, useFocusEffect } from 'expo-router';
@@ -12,34 +12,34 @@ import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  obtenerCategorias,
-  obtenerLugares,
+    obtenerCategorias,
+    obtenerLugares,
 } from '@/servicios/lugares';
 
 import {
-  guardarFavorito,
-  obtenerFavoritos,
-  quitarFavorito,
+    guardarFavorito,
+    obtenerFavoritos,
+    quitarFavorito,
 } from '@/servicios/favoritos';
 
 import type { Categoria } from '@/tipos/categoria';
-import type { Lugar } from '@/tipos/lugares';
+import type { Lugar } from '@/tipos/lugar';
 
 export default function HomeScreen() {
   const [busqueda, setBusqueda] = useState('');

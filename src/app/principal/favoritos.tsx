@@ -28,7 +28,7 @@ import {
 
 import { obtenerLugares } from '@/servicios/lugares';
 
-import type { Lugar } from '@/tipos/lugares';
+import type { Lugar } from '@/tipos/lugar';
 
 export default function FavoritosScreen() {
   const [fontsLoaded] = useFonts({

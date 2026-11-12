@@ -1,15 +1,9 @@
 
-import { Platform } from 'react-native';
 
 import type { Categoria } from '../tipos/categoria';
 import type { Lugar } from '../tipos/lugar';
 
-// Dirección de la API según dónde se ejecuta la app.
-const API_URL =
-  Platform.OS === 'web'
-    ? 'http://localhost:3000'
-    : 'http://192.168.0.245:3000';
-
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 // La API devuelve los datos dentro de la propiedad "datos".
 type RespuestaApi<T> = {
   datos: T;
@@ -21,10 +15,10 @@ function adaptarImagenes(lugar: Lugar): Lugar {
   return {
     ...lugar,
     imagenes: lugar.imagenes.map((imagen) =>
-      imagen.replace(
-        'http://localhost:3000',
-        API_URL
-      )
+     imagen.replace(
+  /http:\/\/(localhost|192\.168\.0\.10):3000/,
+  API_URL
+)
     ),
   };
 }

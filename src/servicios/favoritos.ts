@@ -2,10 +2,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const API_URL =
-  Platform.OS === 'web'
-    ? 'http://localhost:3000'
-    : 'http://192.168.0.245:3000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type Favorito = {
   id: string;

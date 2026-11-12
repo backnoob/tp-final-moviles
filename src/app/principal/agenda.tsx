@@ -25,7 +25,7 @@ import { obtenerEventos } from '@/servicios/eventos';
 import { obtenerLugares } from '@/servicios/lugares';
 
 import type { Evento } from '@/tipos/evento';
-import type { Lugar } from '@/tipos/lugares';
+import type { Lugar } from '@/tipos/lugar';
 
 const diasSemana = [
   'DOM',
