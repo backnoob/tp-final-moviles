@@ -297,6 +297,19 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* NUEVO: BOTÓN MI RECORRIDO */}
+        <TouchableOpacity
+          style={styles.botonMapa}
+          activeOpacity={0.8}
+          onPress={() => router.push('/principal/recorrido')}
+          accessibilityRole="button"
+          accessibilityLabel="Ver mi recorrido de visitas"
+        >
+          <Text style={styles.textoBotonMapa}>
+             Mi Recorrido (QR y Visitas)
+          </Text>
+        </TouchableOpacity>
+
         {/* BUSCADOR */}
         <View style={styles.contenedorBuscador}>
           <Text style={styles.iconoBuscar}>
