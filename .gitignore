@@ -44,4 +44,11 @@ example
 # Configuracion local de la API
 .env
 .env.local
-.env.*.local
+.env.*.localnode_modules/
+android/
+ios/
+.expo/
+.env
+.env.*
+!.env.example
+*.apk
